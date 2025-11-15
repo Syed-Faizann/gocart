@@ -56,9 +56,9 @@ export async function POST(request) {
     }
 
     // image upload to imagekit
-    const buffer = Buffer.from(await image.arrayBuffer());
-    const response = await imagekit.upload({
-      file: buffer,
+    const buffer = Buffer.from(await image.arrayBuffer()); // Convert File to Buffer
+    const response = await imagekit.files.upload({
+      file: await imagekit.toFile(buffer, image.name),
       fileName: image.name,
       folder: "logos",
     });
