@@ -1,4 +1,4 @@
-import { toFile } from "@imagekit/nodejs"; // ImageKit helper
+import { toFile } from "@imagekit/nodejs";
 import prisma from "@/lib/prisma";
 import { getAuth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
@@ -27,12 +27,24 @@ export async function POST(request) {
       !image
     ) {
       return NextResponse.json(
-        { error: "missing store info" },
+        { error: "Missing store info" },
         { status: 400 }
       );
     }
 
-    // Convert browser File to ImageKit compatible file
+    // ✅ Check if user already has a store
+    const existingStore = await prisma.store.findUnique({
+      where: { userId },
+    });
+
+    if (existingStore) {
+      return NextResponse.json(
+        { error: "User already has a store", status: existingStore.status },
+        { status: 400 }
+      );
+    }
+
+    // ✅ Convert browser File to ImageKit compatible file
     const fileBuffer = Buffer.from(await image.arrayBuffer());
     const ikFile = await toFile(fileBuffer, image.name);
 
@@ -44,6 +56,7 @@ export async function POST(request) {
 
     const optimizedImage = uploadResponse.url; // get URL
 
+    // ✅ Create new store
     const newStore = await prisma.store.create({
       data: {
         userId,
@@ -57,12 +70,15 @@ export async function POST(request) {
       },
     });
 
+    // ✅ Link store to user
     await prisma.user.update({
       where: { id: userId },
       data: { store: { connect: { id: newStore.id } } },
     });
 
-    return NextResponse.json({ message: "applied, waiting for approval" });
+    return NextResponse.json({
+      message: "Store submitted, waiting for approval",
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: error.message }, { status: 400 });
