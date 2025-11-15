@@ -1,7 +1,8 @@
+import { toFile } from "@imagekit/nodejs"; // ImageKit helper
 import prisma from "@/lib/prisma";
 import { getAuth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { imagekit } from "@/config/imageKit"; // ✅ use your properly exported imagekit client
+import { imagekit } from "@/config/imageKit";
 
 export async function POST(request) {
   try {
@@ -31,31 +32,18 @@ export async function POST(request) {
       );
     }
 
-    // check if user already has a store
-    const store = await prisma.store.findFirst({ where: { userId } });
-    if (store) return NextResponse.json({ status: store.status });
+    // Convert browser File to ImageKit compatible file
+    const fileBuffer = Buffer.from(await image.arrayBuffer());
+    const ikFile = await toFile(fileBuffer, image.name);
 
-    // check if username is taken
-    const isUsernameTaken = await prisma.store.findFirst({
-      where: { username: username.toLowerCase() },
-    });
-    if (isUsernameTaken)
-      return NextResponse.json(
-        { error: "username already taken" },
-        { status: 400 }
-      );
-
-    // upload image to ImageKit
-    const buffer = Buffer.from(await image.arrayBuffer()); // Convert File to Buffer
     const uploadResponse = await imagekit.files.upload({
-      file: buffer,
+      file: ikFile,
       fileName: image.name,
       folder: "logos",
     });
 
-    const optimizedImage = uploadResponse.url; // direct URL from ImageKit
+    const optimizedImage = uploadResponse.url; // get URL
 
-    // create new store
     const newStore = await prisma.store.create({
       data: {
         userId,
@@ -69,7 +57,6 @@ export async function POST(request) {
       },
     });
 
-    // link store to user
     await prisma.user.update({
       where: { id: userId },
       data: { store: { connect: { id: newStore.id } } },
@@ -78,24 +65,6 @@ export async function POST(request) {
     return NextResponse.json({ message: "applied, waiting for approval" });
   } catch (error) {
     console.error(error);
-    return NextResponse.json(
-      { error: error.code || error.message },
-      { status: 400 }
-    );
-  }
-}
-
-export async function GET(request) {
-  try {
-    const { userId } = getAuth(request);
-    const store = await prisma.store.findFirst({ where: { userId } });
-    if (store) return NextResponse.json({ status: store.status });
-    return NextResponse.json({ status: "not registered" });
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json(
-      { error: error.code || error.message },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }
