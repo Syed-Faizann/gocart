@@ -43,7 +43,6 @@ export default function CreateStore() {
         setStatus(data.status);
         setAlreadySubmitted(true);
 
-        // Set message based on status
         switch (data.status) {
           case "approved":
             setMessage(
@@ -62,10 +61,14 @@ export default function CreateStore() {
             );
             break;
           default:
-            // This handles "user already has a store" or any unknown status
             setMessage("You already have a store.");
-            break;
         }
+      }
+      // ✅ Check if backend returned an error instead of status
+      else if (data.error) {
+        setAlreadySubmitted(true);
+        setMessage(data.error);
+        if (data.status) setStatus(data.status); // optional: show store status
       } else {
         setAlreadySubmitted(false);
       }
