@@ -1,9 +1,14 @@
-import ImageKit from "imagekit"; // ✅
+import ImageKit from "@imagekit/nodejs";
 
-var imagekit = new ImageKit({
-  publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
-  privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
-  urlEndpoint: process.env.IMAGE_URL_ENDPOINT,
+const client = new ImageKit({
+  privateKey: process.env["IMAGEKIT_PRIVATE_KEY"],
+  publicKey: process.env["IMAGEKIT_PUBLIC_KEY"],
+  urlEndpoint: process.env["IMAGE_URL_ENDPOINT"], // This is the default and can be omitted
 });
 
-export default imagekit;
+const response = await client.files.upload({
+  file: fs.createReadStream("path/to/file"),
+  fileName: "file-name.jpg",
+});
+
+console.log(response);
