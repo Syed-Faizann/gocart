@@ -39,9 +39,11 @@ export default function CreateStore() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (["approved", "rejected", "pending"].includes(data.status)) {
+      if (data.status) {
         setStatus(data.status);
         setAlreadySubmitted(true);
+
+        // Set message based on status
         switch (data.status) {
           case "approved":
             setMessage(
@@ -53,16 +55,15 @@ export default function CreateStore() {
             setMessage(
               "Your store has been rejected, contact the admin for more details"
             );
-            setTimeout(() => router.push("/store"), 5000);
             break;
           case "pending":
             setMessage(
-              "Your store request in pending, please wait for admin to approve your store"
+              "Your store request is pending, please wait for admin to approve your store"
             );
-            setTimeout(() => router.push("/store"), 5000);
             break;
-
           default:
+            // This handles "user already has a store" or any unknown status
+            setMessage("You already have a store.");
             break;
         }
       } else {
