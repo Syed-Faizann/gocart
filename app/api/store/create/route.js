@@ -1,17 +1,12 @@
 import prisma from "@/lib/prisma";
 import { getAuth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { imagekit } from "@/config/imageKit";
-import { toFile } from "@imagekit/nodejs"; // 👈 Import toFile here
-
-// create the store
+import { imagekit } from "@/config/imageKit"; // ✅ use your properly exported imagekit client
 
 export async function POST(request) {
   try {
     const { userId } = getAuth(request);
-
-    // Get the data from the form
-    const formData = await request.formData(); // ✅
+    const formData = await request.formData();
 
     const name = formData.get("name");
     const username = formData.get("username");
@@ -36,43 +31,31 @@ export async function POST(request) {
       );
     }
 
-    // check is user have already registered a store
-    const store = await prisma.store.findFirst({
-      where: { userId: userId },
-    });
+    // check if user already has a store
+    const store = await prisma.store.findFirst({ where: { userId } });
+    if (store) return NextResponse.json({ status: store.status });
 
-    if (store) {
-      return NextResponse.json({ status: store.status });
-    }
-
-    // chect username is already taken
+    // check if username is taken
     const isUsernameTaken = await prisma.store.findFirst({
       where: { username: username.toLowerCase() },
     });
-
-    if (isUsernameTaken) {
+    if (isUsernameTaken)
       return NextResponse.json(
         { error: "username already taken" },
         { status: 400 }
       );
-    }
 
-    // image upload to imagekit
+    // upload image to ImageKit
     const buffer = Buffer.from(await image.arrayBuffer()); // Convert File to Buffer
-    const response = await imagekit.files.upload({
-      file: await imagekit.toFile(buffer, image.name),
+    const uploadResponse = await imagekit.files.upload({
+      file: buffer,
       fileName: image.name,
       folder: "logos",
     });
-    const optimizedImage = imagekit.url({
-      path: response.filePath,
-      transformation: [
-        { quality: "auto" },
-        { format: "webp" },
-        { width: "512" },
-      ],
-    });
 
+    const optimizedImage = uploadResponse.url; // direct URL from ImageKit
+
+    // create new store
     const newStore = await prisma.store.create({
       data: {
         userId,
@@ -102,22 +85,11 @@ export async function POST(request) {
   }
 }
 
-// chect is user already registered a store if yes then send status of store
-
 export async function GET(request) {
   try {
     const { userId } = getAuth(request);
-
-    // check is user already registered a store
-    const store = await prisma.store.findFirst({
-      where: { userId: userId },
-    });
-
-    // if store is already registered then send status of store
-    if (store) {
-      return NextResponse.json({ status: store.status });
-    }
-
+    const store = await prisma.store.findFirst({ where: { userId } });
+    if (store) return NextResponse.json({ status: store.status });
     return NextResponse.json({ status: "not registered" });
   } catch (error) {
     console.error(error);
