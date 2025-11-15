@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { getAuth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import imagekit from "@/config/imageKit";
+import { imagekit } from "@/config/imageKit";
 // create the store
 
 export async function POST(request) {
