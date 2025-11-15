@@ -75,11 +75,37 @@ export default function CreateStore() {
     setLoading(false);
   };
 
+  //   const onSubmitHandler = async (e) => {
+  //     e.preventDefault();
+  //     if (!user) {
+  //       return toast.error("Please login to continue");
+  //     }
+  //     try {
+  //       const token = await getToken();
+  //       const formData = new FormData();
+  //       formData.append("name", storeInfo.name);
+  //       formData.append("username", storeInfo.username);
+  //       formData.append("description", storeInfo.description);
+  //       formData.append("email", storeInfo.email);
+  //       formData.append("contact", storeInfo.contact);
+  //       formData.append("address", storeInfo.address);
+  //       formData.append("image", storeInfo.image);
+
+  //       const { data } = await axios.post("/api/store/create", formData, {
+  //         headers: { Authorization: `Bearer ${token}` },
+  //       });
+  //       toast.success(data.message);
+  //       await fetchSellerStatus();
+  //     } catch (error) {
+  //       toast.error(error?.response?.data?.error || error.message);
+  //     }
+  //   };
   const onSubmitHandler = async (e) => {
     e.preventDefault();
-    if (!user) {
-      return toast.error("Please login to continue");
-    }
+    if (!user) return toast.error("Please login to continue");
+
+    if (!storeInfo.image) return toast.error("Please upload a store logo");
+
     try {
       const token = await getToken();
       const formData = new FormData();
@@ -89,11 +115,17 @@ export default function CreateStore() {
       formData.append("email", storeInfo.email);
       formData.append("contact", storeInfo.contact);
       formData.append("address", storeInfo.address);
-      formData.append("image", storeInfo.image);
+
+      // ✅ Append file correctly
+      formData.append("image", storeInfo.image, storeInfo.image.name);
 
       const { data } = await axios.post("/api/store/create", formData, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          // DO NOT set 'Content-Type': let Axios handle it
+        },
       });
+
       toast.success(data.message);
       await fetchSellerStatus();
     } catch (error) {
