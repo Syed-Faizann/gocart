@@ -101,10 +101,7 @@ export async function GET(request) {
       where: { userId: userId },
     });
     if (store) {
-      return NextResponse.json(
-        { status: store.status },
-        { status: store.status }
-      );
+      return NextResponse.json({ status: store.status });
     }
     return NextResponse.json({ status: "not registered" });
   } catch (error) {
