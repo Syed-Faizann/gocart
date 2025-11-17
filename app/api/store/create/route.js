@@ -45,16 +45,16 @@ export async function POST(request) {
     }
 
     // ✅ Convert browser File to ImageKit compatible file
-    const fileBuffer = Buffer.from(await image.arrayBuffer());
-    const ikFile = await toFile(fileBuffer, image.name);
-
-    const uploadResponse = await imagekit.files.upload({
-      file: ikFile,
+    const buffer = Buffer.from(await image.arrayBuffer());
+    const response = await imagekit.upload({
+      file: buffer,
       fileName: image.name,
       folder: "logos",
     });
-
-    const optimizedImage = uploadResponse.url; // get URL
+    const optimizedImage = imagekit.url({
+      path: response.filePath,
+      transformation: [{ quality: "auto", format: "webp", width: "512" }],
+    });
 
     // ✅ Create new store
     const newStore = await prisma.store.create({

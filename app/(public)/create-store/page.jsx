@@ -35,81 +35,44 @@ export default function CreateStore() {
   const fetchSellerStatus = async () => {
     const token = await getToken();
     try {
-      const { data } = await axios.get("/api/store/create", {
+      const { data } = await axios.get("/api/store/seller-status", {
         headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (data.status) {
-        setStatus(data.status);
+      if (["pending", "approved", "rejected"].includes(data.status)) {
         setAlreadySubmitted(true);
-
+        setStatus(data.status);
         switch (data.status) {
-          case "approved":
-            setMessage(
-              "Your store has been approved, you can now add products to your store from dashboard"
-            );
-            setTimeout(() => router.push("/store"), 5000);
-            break;
-          case "rejected":
-            setMessage(
-              "Your store has been rejected, contact the admin for more details"
-            );
-            break;
           case "pending":
             setMessage(
-              "Your store request is pending, please wait for admin to approve your store"
+              "Your store application is under review. We will notify you once it's approved."
+            );
+            break;
+          case "approved":
+            setMessage(
+              "Congratulations! Your store has been approved. Redirecting to your dashboard..."
+            );
+          case "rejected":
+            setMessage(
+              "Unfortunately, your store application was rejected. Please review the requirements and consider reapplying."
             );
             break;
           default:
-            setMessage("You already have a store.");
         }
-      }
-      // ✅ Check if backend returned an error instead of status
-      else if (data.error) {
-        setAlreadySubmitted(true);
-        setMessage(data.error);
-        if (data.status) setStatus(data.status); // optional: show store status
       } else {
         setAlreadySubmitted(false);
       }
+      setLoading(false);
     } catch (error) {
       toast.error(error?.response?.data?.error || error.message);
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
-  //   const onSubmitHandler = async (e) => {
-  //     e.preventDefault();
-  //     if (!user) {
-  //       return toast.error("Please login to continue");
-  //     }
-  //     try {
-  //       const token = await getToken();
-  //       const formData = new FormData();
-  //       formData.append("name", storeInfo.name);
-  //       formData.append("username", storeInfo.username);
-  //       formData.append("description", storeInfo.description);
-  //       formData.append("email", storeInfo.email);
-  //       formData.append("contact", storeInfo.contact);
-  //       formData.append("address", storeInfo.address);
-  //       formData.append("image", storeInfo.image);
-
-  //       const { data } = await axios.post("/api/store/create", formData, {
-  //         headers: { Authorization: `Bearer ${token}` },
-  //       });
-  //       toast.success(data.message);
-  //       await fetchSellerStatus();
-  //     } catch (error) {
-  //       toast.error(error?.response?.data?.error || error.message);
-  //     }
-  //   };
   const onSubmitHandler = async (e) => {
     e.preventDefault();
-    if (!user) return toast.error("Please login to continue");
-
-    if (!storeInfo.image) return toast.error("Please upload a store logo");
-
+    if (!user) {
+      return toast.error("Please login to continue");
+    }
     try {
       const token = await getToken();
       const formData = new FormData();
@@ -119,17 +82,11 @@ export default function CreateStore() {
       formData.append("email", storeInfo.email);
       formData.append("contact", storeInfo.contact);
       formData.append("address", storeInfo.address);
-
-      // ✅ Append file correctly
-      formData.append("image", storeInfo.image, storeInfo.image.name);
+      formData.append("image", storeInfo.image);
 
       const { data } = await axios.post("/api/store/create", formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          // DO NOT set 'Content-Type': let Axios handle it
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       toast.success(data.message);
       await fetchSellerStatus();
     } catch (error) {
