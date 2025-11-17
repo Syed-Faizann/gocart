@@ -32,14 +32,23 @@ export async function POST(request) {
       );
     }
 
-    // ✅ Check if user already has a store
-    const existingStore = await prisma.store.findUnique({
-      where: { userId },
+    const store = await prisma.store.findUnique({
+      where: { username },
+    });
+    if (store) {
+      return NextResponse.json(
+        { error: "Store username already taken" },
+        { status: 400 }
+      );
+    }
+
+    const isUsernameTaken = await prisma.user.findFirst({
+      where: { username: username.toLowerCase() },
     });
 
-    if (existingStore) {
+    if (isUsernameTaken) {
       return NextResponse.json(
-        { error: "User already has a store", status: existingStore.status },
+        { error: "Store username already taken" },
         { status: 400 }
       );
     }
@@ -82,5 +91,27 @@ export async function POST(request) {
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+}
+
+export async function GET(request) {
+  try {
+    const { userId } = getAuth(request);
+    const store = await prisma.store.findFirst({
+      where: { userId: userId },
+    });
+    if (store) {
+      return NextResponse.json(
+        { status: store.status },
+        { status: store.status }
+      );
+    }
+    return NextResponse.json({ status: "not registered" });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: error.code || error.message },
+      { status: 400 }
+    );
   }
 }
