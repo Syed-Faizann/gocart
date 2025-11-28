@@ -44,16 +44,17 @@ export async function DELETE(request){
             return NextResponse.json({error: "not authorized"}, {status: 401})
         }
 
-        const {searchparams} = request.nextUrl;
-        const code = searchparams.get('code')
+        const code = request.nextUrl.searchParams.get("code");
 
-        await prisma.coupon.delete({where: {code}})
-        return NextResponse.json({message: 'Coupon deleted successfully'})
+        await prisma.coupon.delete({ where: { code } });
+
+        return NextResponse.json({ message: 'Coupon deleted successfully' });
 
     } catch (error) {
-        return NextResponse.json({error: error.code || error.message}, {status: 400})
+        return NextResponse.json({ error: error.code || error.message }, { status: 400 });
     }
 }
+
 
 // get all coupon
 export async function GET(request) {
