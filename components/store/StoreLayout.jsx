@@ -17,21 +17,39 @@ const StoreLayout = ({ children }) => {
     const [loading, setLoading] = useState(true)
     const [storeInfo, setStoreInfo] = useState(null)
 
-    const fetchIsSeller = async () => {
-        try {
-            const token = await getToken()
-            const {data} = await axios.get('/api/store/is-seller', {headers : {Authorization: `Bearer ${token}`}})
+    // const fetchIsSeller = async () => {
+    //     try {
+    //         const token = await getToken()
+    //         const {data} = await axios.get('/api/store/is-seller', {headers : {Authorization: `Bearer ${token}`}})
 
-            setIsSeller(data.isSeller)
-            setStoreInfo(data.storeInfo)
-            setLoading(false)
-        } catch (error) {
-            console.error(error)
-        }
-        finally{
-            setLoading(false)
-        }
+    //         setIsSeller(data.isSeller)
+    //         setStoreInfo(data.storeInfo)
+    //         setLoading(false)
+    //     } catch (error) {
+    //         console.error(error)
+    //     }
+    //     finally{
+    //         setLoading(false)
+    //     }
+    // }
+    // storeLayout.js - Update the fetchIsSeller function
+const fetchIsSeller = async () => {
+    try {
+        const token = await getToken()
+        const { data } = await axios.get('/api/store/is-seller', {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        setIsSeller(data.isSeller);
+        setStoreInfo(data.storeInfo);
+        setLoading(false);
+    } catch (error) {
+        console.error("Auth error:", error);
+        setIsSeller(false);
+        setStoreInfo(null);
+        setLoading(false);
     }
+};
 
     useEffect(() => {
         fetchIsSeller()

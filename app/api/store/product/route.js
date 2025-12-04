@@ -1,20 +1,18 @@
 import { getAuth } from "@clerk/nextjs/server";
 import authSeller from "@/middlewares/authSeller";
 import { NextResponse } from "next/server";
-import imagekit from "@/config/imageKit";
 import prisma from "@/lib/prisma";
-import { err } from "inngest/types";
-
-// Add a new product
 
 export async function POST(request) {
   try {
     const { userId } = getAuth(request);
-    const storeId = await authSeller(userId);
+    const authResult = await authSeller(userId);
 
-    if (!storeId) {
+    if (!authResult || !authResult.isSeller) {
       return NextResponse.json({ error: "not authorized" }, { status: 401 });
     }
+
+    const storeId = authResult.storeId;
 
     // Get the data from the form
     const formData = await request.formData();
@@ -23,7 +21,8 @@ export async function POST(request) {
     const mrp = Number(formData.get("mrp"));
     const price = Number(formData.get("price"));
     const category = formData.get("category");
-    const images = formData.get("images");
+    
+    const images = formData.getAll("images");
 
     if (
       !name ||
@@ -40,27 +39,56 @@ export async function POST(request) {
       );
     }
 
-    //upload images to imagekit
-    const imageUrl = await Promise.all(
-      images.map(async (image) => {
-        const buffer = Buffer.from(await image.arrayBuffer());
-        const response = await imagekit.upload({
-          file: buffer,
-          fileName: image.name,
-          folder: "products",
-        });
-        const url = imagekit.url({
-          path: response.filePath,
-          transformation: [
-            { quality: "auto" },
-            { format: "webp" },
-            { width: "1024" },
-          ],
-        });
-        return url;
+    // Filter out any null/undefined images
+    const validImages = images.filter(image => image && image.size > 0);
+
+    if (validImages.length === 0) {
+      return NextResponse.json(
+        { error: "No valid images provided" },
+        { status: 400 }
+      );
+    }
+
+    // Upload images to imagekit
+    const imageUrls = await Promise.all(
+      validImages.map(async (image) => {
+        try {
+          const buffer = Buffer.from(await image.arrayBuffer());
+          const base64File = buffer.toString('base64');
+
+          const uploadFormData = new FormData();
+          uploadFormData.append('file', base64File);
+          uploadFormData.append('fileName', image.name);
+          uploadFormData.append('folder', '/products');
+          uploadFormData.append('useUniqueFileName', 'true');
+
+          const uploadResponse = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+            method: 'POST',
+            body: uploadFormData,
+            headers: {
+              'Authorization': `Basic ${Buffer.from(`${process.env.IMAGEKIT_PRIVATE_KEY}:`).toString('base64')}`
+            }
+          });
+
+          if (!uploadResponse.ok) {
+            const errorText = await uploadResponse.text();
+            throw new Error(`Image upload failed: ${uploadResponse.statusText}`);
+          }
+
+          const uploadResult = await uploadResponse.json();
+
+          const imagekitId = process.env.IMAGEKIT_URL_ENDPOINT?.replace('https://ik.imagekit.io/', '');
+          const optimizedImage = `https://ik.imagekit.io/${imagekitId}/tr:q-auto,f-webp,w-1024/${uploadResult.filePath}`;
+
+          return optimizedImage;
+        } catch (error) {
+          console.error("Error uploading image:", error);
+          throw new Error(`Failed to upload image: ${image.name}`);
+        }
       })
     );
 
+    // Create product in database
     await prisma.product.create({
       data: {
         name,
@@ -68,39 +96,51 @@ export async function POST(request) {
         mrp,
         price,
         category,
-        images: imageUrl,
+        images: imageUrls,
         storeId,
       },
     });
 
     return NextResponse.json({ message: "Product added successfully" });
   } catch (error) {
-    console.error(error);
+    console.error("Product creation error:", error);
+    
+    if (error.code === 'P2002') {
+      return NextResponse.json(
+        { error: "Product with similar details already exists" },
+        { status: 400 }
+      );
+    }
+    
     return NextResponse.json(
-      { error: error.code || error.message },
-      { status: 400 }
+      { error: error.message || "Internal server error" },
+      { status: 500 }
     );
   }
 }
 
-// Get all products for a seller
-
 export async function GET(request) {
-  const { userId } = getAuth(request);
-  const storeId = await authSeller(userId);
   try {
-    if (!storeId) {
+    const { userId } = getAuth(request);
+    const authResult = await authSeller(userId);
+    
+    if (!authResult || !authResult.isSeller) {
       return NextResponse.json({ error: "not authorized" }, { status: 401 });
     }
+
+    const storeId = authResult.storeId;
+    
     const products = await prisma.product.findMany({
       where: { storeId },
+      orderBy: { createdAt: 'desc' }
     });
+    
     return NextResponse.json({ products });
   } catch (error) {
-    console.error(error);
+    console.error("Products fetch error:", error);
     return NextResponse.json(
-      { error: error.code || error.message },
-      { status: 400 }
+      { error: "Internal server error" },
+      { status: 500 }
     );
   }
 }
