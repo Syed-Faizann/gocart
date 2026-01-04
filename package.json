@@ -17,6 +17,7 @@
     "@prisma/adapter-neon": "^6.19.0",
     "@prisma/client": "^6.19.0",
     "@reduxjs/toolkit": "^2.8.2",
+    "@stripe/stripe-js": "^8.5.3",
     "axios": "^1.13.2",
     "date-fns": "^4.1.0",
     "imagekit-javascript": "^4.0.1",
@@ -28,6 +29,7 @@
     "react-hot-toast": "^2.5.2",
     "react-redux": "^9.2.0",
     "recharts": "^3.1.2",
+    "stripe": "^20.0.0",
     "ws": "^8.18.3"
   },
   "devDependencies": {

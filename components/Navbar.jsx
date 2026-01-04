@@ -1,8 +1,9 @@
+
 "use client";
 import { PackageIcon, Search, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { useUser, useClerk, UserButton, SignedIn, SignedOut, Protect } from "@clerk/nextjs";
 
@@ -12,7 +13,32 @@ const Navbar = () => {
   const { openSignIn } = useClerk();
 
   const [search, setSearch] = useState("");
-  const cartCount = useSelector((state) => state.cart.total);
+  const [cartDisplayCount, setCartDisplayCount] = useState(0);
+  
+  // Get cart data from Redux
+  const cartTotal = useSelector((state) => state.cart.total);
+
+  // Fix cart count display
+  useEffect(() => {
+    // Ensure cart count is a valid number
+    let count = 0;
+    
+    if (typeof cartTotal === 'number' && !isNaN(cartTotal)) {
+      count = Math.max(0, Math.floor(cartTotal));
+    } else if (cartTotal && typeof cartTotal === 'object') {
+      // If cartTotal is an object (wrong data), calculate from cartItems
+      const cartItems = useSelector(state => state.cart.cartItems);
+      if (cartItems && typeof cartItems === 'object') {
+        count = Object.values(cartItems).reduce((sum, qty) => {
+          const quantity = typeof qty === 'number' ? qty : 0;
+          return sum + quantity;
+        }, 0);
+      }
+    }
+    
+    // Cap at 99 for display
+    setCartDisplayCount(count > 99 ? '99+' : count);
+  }, [cartTotal]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -67,9 +93,11 @@ const Navbar = () => {
             >
               <ShoppingCart size={18} />
               Cart
-              <button className="absolute -top-1 left-3 text-[8px] text-white bg-slate-600 size-3.5 rounded-full">
-                {cartCount}
-              </button>
+              {cartDisplayCount > 0 && (
+                <span className="absolute -top-1 left-3 text-[8px] font-bold text-white bg-red-500 size-3.5 rounded-full flex items-center justify-center">
+                  {cartDisplayCount}
+                </span>
+              )}
             </Link>
 
             {/* Auth Section */}

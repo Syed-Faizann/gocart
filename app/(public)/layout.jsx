@@ -9,6 +9,7 @@ import { useUser } from "@clerk/nextjs";
 import { useAuth } from "@clerk/clerk-react";
 import { fetchCart, uploadCart } from "@/lib/features/cart/cartSlice";
 import { fetchAddresses } from "@/lib/features/address/addressSlice";
+import { fetchUserRatings } from "@/lib/features/rating/ratingSlice";
 
 export default function PublicLayout({ children }) {
     const dispatch = useDispatch()
@@ -25,7 +26,8 @@ export default function PublicLayout({ children }) {
 
     useEffect(() => {
         dispatch(fetchProducts({}))
-    }, [dispatch]);
+        dispatch(fetchUserRatings({getToken}))
+    }, [dispatch, user]);
 
     useEffect(() => {
         console.log('Attempting to fetch cart for user:', user?.id)
@@ -33,6 +35,7 @@ export default function PublicLayout({ children }) {
             dispatch(fetchCart({getToken}))
             hasFetchedCart.current = true
         }
+        
     }, [user, getToken, dispatch]);
 
     useEffect(() => {
