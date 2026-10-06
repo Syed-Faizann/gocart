@@ -5,21 +5,22 @@ import prisma from "@/lib/prisma";
 
 export async function GET(request) {
   try {
-    console.log("=== STORE DASHBOARD API CALLED ===");
-    
     const { userId } = getAuth(request);
-    console.log("User ID:", userId);
-    
+
     if (!userId) {
       return NextResponse.json({ error: "not authorized" }, { status: 401 });
     }
 
-    const { storeId } = await authSeller(userId);
-    console.log("Store ID:", storeId);
+    const authResult = await authSeller(userId);
 
-    if (!storeId) {
-      return NextResponse.json({ error: "Seller not found" }, { status: 404 });
+    if (!authResult || !authResult.isSeller) {
+      return NextResponse.json(
+        { error: authResult?.message || "Seller store not found or not active" },
+        { status: 404 }
+      );
     }
+
+    const storeId = authResult.storeId;
 
     // Get all orders for the seller
     const orders = await prisma.order.findMany({
@@ -34,8 +35,6 @@ export async function GET(request) {
       },
     });
 
-    console.log("Found orders:", orders.length);
-
     // Get all products for the seller
     const products = await prisma.product.findMany({
       where: { storeId },
@@ -45,62 +44,55 @@ export async function GET(request) {
       },
     });
 
-    console.log("Found products:", products.length);
-
     // Get all ratings for the seller's products
-    const ratings = await prisma.rating.findMany({
-      where: { 
-        productId: { 
-          in: products.map((product) => product.id) 
-        } 
-      },
-      include: { 
-        user: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-            email: true,
-          }
-        }, 
-        product: {
-          select: {
-            id: true,
-            name: true,
-            category: true,
-            images: true,
-          }
-        } 
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 20, // Limit to 20 most recent ratings
-    });
-
-    console.log("Found ratings:", ratings.length);
+    const productIds = products.map((product) => product.id);
+    const ratings =
+      productIds.length > 0
+        ? await prisma.rating.findMany({
+            where: {
+              productId: { in: productIds },
+            },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  image: true,
+                  email: true,
+                },
+              },
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  category: true,
+                  images: true,
+                },
+              },
+            },
+            orderBy: { createdAt: "desc" },
+            take: 20,
+          })
+        : [];
 
     // Calculate total earnings
     let totalEarnings = 0;
-    orders.forEach(order => {
-      totalEarnings += order.total;
+    orders.forEach((order) => {
+      totalEarnings += order.total || 0;
     });
-
-    console.log("Total earnings calculated:", totalEarnings);
 
     const dashboardData = {
       ratings,
       totalOrders: orders.length,
-      totalEarnings: totalEarnings.toFixed(2), // Use toFixed(2) to keep 2 decimal places
+      totalEarnings: totalEarnings.toFixed(2),
       totalProducts: products.length,
-      recentOrders: orders.slice(0, 5), // Include recent orders for debugging
+      recentOrders: orders.slice(0, 5),
     };
 
-    console.log("Dashboard data prepared:", dashboardData);
-
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
-      dashboardData 
+      dashboardData,
     });
-    
   } catch (error) {
     console.error("Store dashboard error:", error);
     return NextResponse.json(

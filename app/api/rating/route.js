@@ -6,8 +6,13 @@ import { NextResponse } from "next/server";
 export async function POST(request) {
   try {
     const { userId } = getAuth(request);
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { orderId, productId, rating, review } = await request.json();
-    const order = await prisma.order.findUnique({
+
+    const order = await prisma.order.findFirst({
       where: { id: orderId, userId },
     });
 
@@ -16,7 +21,7 @@ export async function POST(request) {
     }
 
     const isAlreadyRated = await prisma.rating.findFirst({
-      where: { productId, orderId },
+      where: { productId, orderId, userId },
     });
 
     if (isAlreadyRated) {
@@ -41,7 +46,7 @@ export async function POST(request) {
       rating: response,
     });
   } catch (error) {
-    console.error(error);
+    console.error("Rating error:", error);
     return NextResponse.json(
       { error: error.code || error.message },
       { status: 400 }
@@ -50,7 +55,6 @@ export async function POST(request) {
 }
 
 // Get all ratings for a user
-
 export async function GET(request) {
   try {
     const { userId } = getAuth(request);
@@ -62,9 +66,9 @@ export async function GET(request) {
       where: { userId },
     });
 
-    return NextResponse.json({ratings});
+    return NextResponse.json({ ratings });
   } catch (error) {
-    console.error(error);
+    console.error("Get ratings error:", error);
     return NextResponse.json(
       { error: error.code || error.message },
       { status: 400 }

@@ -1,125 +1,236 @@
-import { getAuth } from "@clerk/nextjs/server";
-import authSeller from "@/middlewares/authSeller";
+import { getAuth, clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
 export async function POST(request) {
   try {
     const { userId } = getAuth(request);
-    const storeId = await authSeller(userId);
 
-    if (!storeId) {
-      return NextResponse.json({ error: "not authorized" }, { status: 401 });
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Unauthorized. Please log in." },
+        { status: 401 }
+      );
     }
 
-    // Get the data from the form
     const formData = await request.formData();
-    const name = formData.get("name");
-    const description = formData.get("description");
-    const mrp = Number(formData.get("mrp"));
-    const price = Number(formData.get("price"));
-    const category = formData.get("category");
-    
-    // Use getAll to get all images with the same field name
-    const images = formData.getAll("images");
+    const name = formData.get("name")?.toString().trim();
+    const username = formData.get("username")?.toString().trim().toLowerCase();
+    const description = formData.get("description")?.toString().trim();
+    const email = formData.get("email")?.toString().trim();
+    const contact = formData.get("contact")?.toString().trim();
+    const address = formData.get("address")?.toString().trim();
+    const image = formData.get("image");
 
     if (
       !name ||
+      !username ||
       !description ||
-      !mrp ||
-      !price ||
-      !category ||
-      !images ||
-      images.length < 1
+      !email ||
+      !contact ||
+      !address ||
+      !image ||
+      typeof image === "string" ||
+      image.size === 0
     ) {
       return NextResponse.json(
-        { error: "missing product details" },
+        { error: "All store fields and a store logo are required." },
         { status: 400 }
       );
     }
 
-    // Filter out any null/undefined images
-    const validImages = images.filter(image => image && image.size > 0);
+    // Ensure user exists in our database
+    let user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
 
-    if (validImages.length === 0) {
-      return NextResponse.json(
-        { error: "No valid images provided" },
-        { status: 400 }
-      );
-    }
+    if (!user) {
+      let userName = name;
+      let userEmail = email;
+      let userImage = null;
 
-    // Upload images to imagekit using the same logic as store creation
-    const imageUrls = await Promise.all(
-      validImages.map(async (image) => {
-        try {
-          // Convert image to buffer and then to base64
-          const buffer = Buffer.from(await image.arrayBuffer());
-          const base64File = buffer.toString('base64');
-
-          // ImageKit upload with Basic Authentication
-          const uploadFormData = new FormData();
-          uploadFormData.append('file', base64File);
-          uploadFormData.append('fileName', image.name);
-          uploadFormData.append('folder', '/products'); // Changed folder to products
-          uploadFormData.append('useUniqueFileName', 'true');
-
-          console.log('Uploading product image to ImageKit...');
-
-          // Upload to ImageKit with Basic Authentication
-          const uploadResponse = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
-            method: 'POST',
-            body: uploadFormData,
-            headers: {
-              'Authorization': `Basic ${Buffer.from(`${process.env.IMAGEKIT_PRIVATE_KEY}:`).toString('base64')}`
-            }
-          });
-
-          if (!uploadResponse.ok) {
-            const errorText = await uploadResponse.text();
-            console.error('ImageKit upload failed:', errorText);
-            throw new Error(`Image upload failed: ${uploadResponse.statusText}`);
-          }
-
-          const uploadResult = await uploadResponse.json();
-          console.log('ImageKit upload success:', uploadResult);
-
-          // Create optimized image URL for products
-          const imagekitId = process.env.IMAGEKIT_URL_ENDPOINT?.replace('https://ik.imagekit.io/', '');
-          const optimizedImage = `https://ik.imagekit.io/${imagekitId}/tr:q-auto,f-webp,w-1024/${uploadResult.filePath}`;
-
-          return optimizedImage;
-        } catch (error) {
-          console.error("Error uploading image:", error);
-          throw new Error(`Failed to upload image: ${image.name}`);
+      try {
+        const client = await clerkClient();
+        const clerkUser = await client.users.getUser(userId);
+        if (clerkUser) {
+          userName =
+            `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() ||
+            name;
+          userEmail =
+            clerkUser.emailAddresses?.[0]?.emailAddress || email;
+          userImage = clerkUser.imageUrl || null;
         }
-      })
-    );
+      } catch (clerkErr) {
+        console.warn("Could not fetch user details from Clerk:", clerkErr.message);
+      }
 
-    // Create product in database
-    await prisma.product.create({
-      data: {
-        name,
-        description,
-        mrp,
-        price,
-        category,
-        images: imageUrls,
-        storeId,
+      user = await prisma.user.create({
+        data: {
+          id: userId,
+          name: userName,
+          email: userEmail,
+          username: username,
+          image: userImage,
+          cart: {},
+        },
+      });
+    }
+
+    // Check if user already has a store
+    const existingUserStore = await prisma.store.findUnique({
+      where: { userId },
+    });
+
+    if (existingUserStore) {
+      if (existingUserStore.status === "pending") {
+        return NextResponse.json(
+          { error: "Your store application is already submitted and pending review." },
+          { status: 400 }
+        );
+      }
+      if (existingUserStore.status === "approved") {
+        return NextResponse.json(
+          { error: "You already have an approved store." },
+          { status: 400 }
+        );
+      }
+      // If rejected, we allow reapplying by updating the existing store record below
+    }
+
+    // Check if store username is taken by another store
+    const existingStoreWithUsername = await prisma.store.findUnique({
+      where: { username },
+    });
+
+    if (
+      existingStoreWithUsername &&
+      existingStoreWithUsername.userId !== userId
+    ) {
+      return NextResponse.json(
+        { error: "Store username is already taken by another store." },
+        { status: 400 }
+      );
+    }
+
+    // Check if username is taken by another user
+    const existingUserWithUsername = await prisma.user.findFirst({
+      where: {
+        username: username,
+        id: { not: userId },
       },
     });
 
-    return NextResponse.json({ message: "Product added successfully" });
-  } catch (error) {
-    console.error("Product creation error:", error);
-    
-    // Handle specific Prisma errors
-    if (error.code === 'P2002') {
+    if (existingUserWithUsername) {
       return NextResponse.json(
-        { error: "Product with similar details already exists" },
+        { error: "Username is already taken by another account." },
         { status: 400 }
       );
     }
-    
+
+    // Upload logo image to ImageKit
+    const buffer = Buffer.from(await image.arrayBuffer());
+    const base64File = buffer.toString("base64");
+
+    const uploadFormData = new FormData();
+    uploadFormData.append("file", base64File);
+    uploadFormData.append("fileName", image.name || "store-logo.png");
+    uploadFormData.append("folder", "/logos");
+    uploadFormData.append("useUniqueFileName", "true");
+
+    const uploadResponse = await fetch("https://upload.imagekit.io/api/v1/files/upload", {
+      method: "POST",
+      body: uploadFormData,
+      headers: {
+        Authorization: `Basic ${Buffer.from(
+          `${process.env.IMAGEKIT_PRIVATE_KEY}:`
+        ).toString("base64")}`,
+      },
+    });
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      console.error("ImageKit logo upload failed:", errorText);
+      throw new Error(`Logo upload failed: ${uploadResponse.statusText}`);
+    }
+
+    const uploadResult = await uploadResponse.json();
+    const endpoint = process.env.IMAGEKIT_URL_ENDPOINT?.replace(/\/$/, "");
+    const filePath = uploadResult.filePath?.replace(/^\//, "");
+    const optimizedImage = `${endpoint}/tr:q-auto,f-webp,w-512,h-512/${filePath}`;
+
+    let storeResult;
+    if (existingUserStore && existingUserStore.status === "rejected") {
+      // Reapply: update existing rejected store
+      storeResult = await prisma.store.update({
+        where: { userId },
+        data: {
+          name,
+          description,
+          username,
+          email,
+          contact,
+          address,
+          logo: optimizedImage,
+          status: "pending",
+          isActive: false,
+        },
+      });
+    } else {
+      // Create new store
+      storeResult = await prisma.store.create({
+        data: {
+          userId,
+          name,
+          description,
+          username,
+          email,
+          contact,
+          address,
+          logo: optimizedImage,
+          status: "pending",
+          isActive: false,
+        },
+      });
+    }
+
+    // Ensure user username is updated if not set
+    if (!user.username || user.username !== username) {
+      try {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { username },
+        });
+      } catch (err) {
+        console.warn("Could not update user username:", err.message);
+      }
+    }
+
+    return NextResponse.json({
+      message: "Store submitted, waiting for approval",
+      store: {
+        id: storeResult.id,
+        name: storeResult.name,
+        status: storeResult.status,
+      },
+    });
+  } catch (error) {
+    console.error("Store creation error:", error);
+
+    if (error.code === "P2002") {
+      if (error.meta?.target?.includes("userId")) {
+        return NextResponse.json(
+          { error: "You can only create one store per account" },
+          { status: 400 }
+        );
+      }
+      if (error.meta?.target?.includes("username")) {
+        return NextResponse.json(
+          { error: "Store username already taken" },
+          { status: 400 }
+        );
+      }
+    }
+
     return NextResponse.json(
       { error: error.message || "Internal server error" },
       { status: 500 }
@@ -130,24 +241,37 @@ export async function POST(request) {
 export async function GET(request) {
   try {
     const { userId } = getAuth(request);
-    const storeId = await authSeller(userId);
-    
-    if (!storeId) {
-      return NextResponse.json({ error: "not authorized" }, { status: 401 });
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
     }
-    
-    const products = await prisma.product.findMany({
-      where: { storeId },
-      orderBy: { createdAt: 'desc' }
+
+    const store = await prisma.store.findUnique({
+      where: { userId },
     });
-    
-    return NextResponse.json({ products });
+
+    if (store) {
+      return NextResponse.json({
+        status: store.status,
+        store: {
+          id: store.id,
+          name: store.name,
+          username: store.username,
+          status: store.status,
+          isActive: store.isActive,
+        },
+      });
+    }
+
+    return NextResponse.json({ status: "not registered" });
   } catch (error) {
-    console.error("Products fetch error:", error);
+    console.error("Store fetch error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: error.message || "Internal server error" },
       { status: 500 }
     );
   }
 }
-

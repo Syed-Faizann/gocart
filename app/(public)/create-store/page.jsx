@@ -25,19 +25,30 @@ export default function CreateStore() {
     email: "",
     contact: "",
     address: "",
-    image: "",
+    image: null,
   });
+
+  // Pre-fill email if user is loaded and field is empty
+  useEffect(() => {
+    if (user?.primaryEmailAddress?.emailAddress) {
+      setStoreInfo((prev) => ({
+        ...prev,
+        email: prev.email || user.primaryEmailAddress.emailAddress,
+      }));
+    }
+  }, [user]);
 
   const onChangeHandler = (e) => {
     setStoreInfo({ ...storeInfo, [e.target.name]: e.target.value });
   };
 
   const fetchSellerStatus = async () => {
-    const token = await getToken();
     try {
+      const token = await getToken();
       const { data } = await axios.get("/api/store/create", {
         headers: { Authorization: `Bearer ${token}` },
       });
+
       if (["pending", "approved", "rejected"].includes(data.status)) {
         setAlreadySubmitted(true);
         setStatus(data.status);
@@ -51,45 +62,77 @@ export default function CreateStore() {
             setMessage(
               "Congratulations! Your store has been approved. Redirecting to your dashboard..."
             );
+            break;
           case "rejected":
             setMessage(
               "Unfortunately, your store application was rejected. Please review the requirements and consider reapplying."
             );
             break;
           default:
+            setMessage("");
         }
       } else {
         setAlreadySubmitted(false);
+        setStatus("");
+        setMessage("");
       }
-      setLoading(false);
     } catch (error) {
+      console.error("Fetch seller status error:", error);
       toast.error(error?.response?.data?.error || error.message);
+    } finally {
       setLoading(false);
     }
   };
+
+  // Redirect to store dashboard if approved
+  useEffect(() => {
+    if (status === "approved") {
+      const timer = setTimeout(() => {
+        router.push("/store");
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [status, router]);
 
   const onSubmitHandler = async (e) => {
     e.preventDefault();
     if (!user) {
       return toast.error("Please login to continue");
     }
+
+    if (!storeInfo.image) {
+      return toast.error("Please upload a store logo");
+    }
+
+    if (
+      !storeInfo.name.trim() ||
+      !storeInfo.username.trim() ||
+      !storeInfo.description.trim() ||
+      !storeInfo.email.trim() ||
+      !storeInfo.contact.trim() ||
+      !storeInfo.address.trim()
+    ) {
+      return toast.error("Please fill in all store fields");
+    }
+
     try {
       const token = await getToken();
       const formData = new FormData();
-      formData.append("name", storeInfo.name);
-      formData.append("username", storeInfo.username);
-      formData.append("description", storeInfo.description);
-      formData.append("email", storeInfo.email);
-      formData.append("contact", storeInfo.contact);
-      formData.append("address", storeInfo.address);
+      formData.append("name", storeInfo.name.trim());
+      formData.append("username", storeInfo.username.trim().toLowerCase());
+      formData.append("description", storeInfo.description.trim());
+      formData.append("email", storeInfo.email.trim());
+      formData.append("contact", storeInfo.contact.trim());
+      formData.append("address", storeInfo.address.trim());
       formData.append("image", storeInfo.image);
 
       const { data } = await axios.post("/api/store/create", formData, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      toast.success(data.message);
+      toast.success(data.message || "Store application submitted successfully!");
       await fetchSellerStatus();
     } catch (error) {
+      console.error("Store submit error:", error);
       toast.error(error?.response?.data?.error || error.message);
     }
   };
@@ -97,6 +140,8 @@ export default function CreateStore() {
   useEffect(() => {
     if (user) {
       fetchSellerStatus();
+    } else {
+      setLoading(false);
     }
   }, [user]);
 
@@ -117,7 +162,7 @@ export default function CreateStore() {
           <form
             onSubmit={(e) =>
               toast.promise(onSubmitHandler(e), {
-                loading: "Submitting data...",
+                loading: "Submitting store details...",
               })
             }
             className="max-w-7xl mx-auto flex flex-col items-start gap-3 text-slate-500"
@@ -142,8 +187,8 @@ export default function CreateStore() {
                     ? URL.createObjectURL(storeInfo.image)
                     : assets.upload_area
                 }
-                className="rounded-lg mt-2 h-16 w-auto"
-                alt=""
+                className="rounded-lg mt-2 h-16 w-auto object-cover"
+                alt="Store Logo"
                 width={150}
                 height={100}
               />
@@ -165,6 +210,7 @@ export default function CreateStore() {
               type="text"
               placeholder="Enter your store username"
               className="border border-slate-300 outline-slate-400 w-full max-w-lg p-2 rounded"
+              required
             />
 
             <p>Name</p>
@@ -175,6 +221,7 @@ export default function CreateStore() {
               type="text"
               placeholder="Enter your store name"
               className="border border-slate-300 outline-slate-400 w-full max-w-lg p-2 rounded"
+              required
             />
 
             <p>Description</p>
@@ -185,6 +232,7 @@ export default function CreateStore() {
               rows={5}
               placeholder="Enter your store description"
               className="border border-slate-300 outline-slate-400 w-full max-w-lg p-2 rounded resize-none"
+              required
             />
 
             <p>Email</p>
@@ -195,6 +243,7 @@ export default function CreateStore() {
               type="email"
               placeholder="Enter your store email"
               className="border border-slate-300 outline-slate-400 w-full max-w-lg p-2 rounded"
+              required
             />
 
             <p>Contact Number</p>
@@ -205,6 +254,7 @@ export default function CreateStore() {
               type="text"
               placeholder="Enter your store contact number"
               className="border border-slate-300 outline-slate-400 w-full max-w-lg p-2 rounded"
+              required
             />
 
             <p>Address</p>
@@ -215,9 +265,13 @@ export default function CreateStore() {
               rows={5}
               placeholder="Enter your store address"
               className="border border-slate-300 outline-slate-400 w-full max-w-lg p-2 rounded resize-none"
+              required
             />
 
-            <button className="bg-slate-800 text-white px-12 py-2 rounded mt-10 mb-40 active:scale-95 hover:bg-slate-900 transition ">
+            <button
+              type="submit"
+              className="bg-slate-800 text-white px-12 py-2 rounded mt-10 mb-40 active:scale-95 hover:bg-slate-900 transition cursor-pointer"
+            >
               Submit
             </button>
           </form>
@@ -232,6 +286,14 @@ export default function CreateStore() {
               redirecting to dashboard in{" "}
               <span className="font-semibold">5 seconds</span>
             </p>
+          )}
+          {status === "rejected" && (
+            <button
+              onClick={() => setAlreadySubmitted(false)}
+              className="mt-6 bg-slate-800 text-white px-8 py-2 rounded hover:bg-slate-900 transition cursor-pointer"
+            >
+              Reapply / Update Store Details
+            </button>
           )}
         </div>
       )}

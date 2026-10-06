@@ -16,19 +16,19 @@ export async function POST(request) {
 
     const { storeId, status } = await request.json();
 
-    if (status == "approved") {
+    if (status === "approved") {
       await prisma.store.update({
         where: { id: storeId },
         data: { status: "approved", isActive: true },
       });
-    } else if (status == "rejected") {
+    } else if (status === "rejected") {
       await prisma.store.update({
         where: { id: storeId },
-        data: { status: "rejected" },
+        data: { status: "rejected", isActive: false },
       });
     }
 
-    return NextResponse.json({ message: status + "successfully" });
+    return NextResponse.json({ message: `${status} successfully` });
   } catch (error) {
     console.error(error);
     return NextResponse.json(
@@ -39,7 +39,6 @@ export async function POST(request) {
 }
 
 // get all pending and rejected stores
-
 export async function GET(request) {
   try {
     const { userId } = getAuth(request);

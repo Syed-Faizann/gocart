@@ -183,25 +183,31 @@ const updateOrderStatus = async (orderId, status) => {
             <div className="mb-4">
               <h3 className="font-semibold mb-2">Products</h3>
               <div className="space-y-2">
-                {selectedOrder.orderItems.map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-4 border border-slate-100 shadow rounded p-2"
-                  >
-                    <img
-                      src={
-                        item.product.images?.[0].src || item.product.images?.[0]
-                      }
-                      alt={item.product?.name}
-                      className="w-16 h-16 object-cover rounded"
-                    />
-                    <div className="flex-1">
-                      <p className="text-slate-800">{item.product?.name}</p>
-                      <p>Qty: {item.quantity}</p>
-                      <p>Price: ${item.price}</p>
+                {selectedOrder.orderItems?.map((item, i) => {
+                  const productImg =
+                    item.product?.images?.[0]?.src ||
+                    item.product?.images?.[0] ||
+                    "/placeholder.png";
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-center gap-4 border border-slate-100 shadow rounded p-2"
+                    >
+                      <img
+                        src={productImg}
+                        alt={item.product?.name || "Product"}
+                        className="w-16 h-16 object-cover rounded"
+                      />
+                      <div className="flex-1">
+                        <p className="text-slate-800 font-medium">
+                          {item.product?.name || "Product"}
+                        </p>
+                        <p>Qty: {item.quantity}</p>
+                        <p>Price: ${item.price}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -215,10 +221,10 @@ const updateOrderStatus = async (orderId, status) => {
                 <span className="text-green-700">Paid:</span>{" "}
                 {selectedOrder.isPaid ? "Yes" : "No"}
               </p>
-              {selectedOrder.isCouponUsed && (
+              {selectedOrder.isCouponUsed && selectedOrder.coupon?.code && (
                 <p>
                   <span className="text-green-700">Coupon:</span>{" "}
-                  {selectedOrder.coupon.code} ({selectedOrder.coupon.discount}%
+                  {selectedOrder.coupon.code} ({selectedOrder.coupon?.discount || 0}%
                   off)
                 </p>
               )}

@@ -2,35 +2,45 @@ import prisma from "@/lib/prisma";
 
 const authSeller = async (userId) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { store: true },
+    if (!userId) {
+      return {
+        isSeller: false,
+        message: "User not authenticated",
+      };
+    }
+
+    const store = await prisma.store.findUnique({
+      where: { userId },
     });
 
-    if (user?.store) {
-      if (user.store.status === "approved" && user.store.isActive) {
+    if (store) {
+      if (store.status === "approved" && store.isActive) {
         return {
           isSeller: true,
-          storeId: user.store.id,
-          storeInfo: user.store
+          storeId: store.id,
+          storeInfo: store,
         };
       } else {
         return {
           isSeller: false,
-          message: "Store not approved or inactive"
+          message:
+            store.status !== "approved"
+              ? `Store application is ${store.status}`
+              : "Store is currently inactive",
+          storeInfo: store,
         };
       }
-    } else {
-      return {
-        isSeller: false,
-        message: "No store found"
-      };
     }
+
+    return {
+      isSeller: false,
+      message: "No store found",
+    };
   } catch (error) {
     console.error("Auth seller error:", error);
     return {
       isSeller: false,
-      message: "Authentication error"
+      message: "Authentication error",
     };
   }
 };

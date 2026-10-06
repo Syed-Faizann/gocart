@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import authSeller from "@/middlewares/authSeller";
-import { getAuth } from "@clerk/nextjs/server";
-// Get store info & store products
 
+// Get store info & store products
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -13,23 +11,27 @@ export async function GET(request) {
       return NextResponse.json({ error: "missing username" }, { status: 400 });
     }
 
-    // get store info and instock products with raitings
-
-    const store = await prisma.store.findUnique({
+    // get store info and instock products with ratings
+    const store = await prisma.store.findFirst({
       where: { username, isActive: true },
-      include: { Product: { include: { rating: true } } },
+      include: {
+        Product: {
+          where: { inStock: true },
+          include: { rating: true },
+        },
+      },
     });
 
     if (!store) {
-      return NextResponse.json({ error: "store not found" }, { status: 400 });
+      return NextResponse.json({ error: "store not found" }, { status: 404 });
     }
 
     return NextResponse.json({ store });
   } catch (error) {
-    console.error(error);
+    console.error("Store data error:", error);
     return NextResponse.json(
       { error: error.code || error.message },
-      { status: 400 }
+      { status: 500 }
     );
   }
 }
